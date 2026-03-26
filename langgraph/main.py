@@ -20,7 +20,7 @@ Usage:
 # --- OTEL init (MUST happen before LangChain imports) ---
 import uuid
 
-from ledda_init import init_ledda
+from ledda_init import init_ledda, ledda_flush
 
 SESSION_ID = f"session-{uuid.uuid4().hex[:8]}"
 
@@ -50,7 +50,7 @@ class State(TypedDict):
 
 
 llm = ChatOpenAI(
-    model="anthropic/claude-sonnet-4",
+    model="openai/gpt-5.4-nano",
     openai_api_key=os.environ["OPENROUTER_API_KEY"],
     openai_api_base="https://openrouter.ai/api/v1",
     temperature=0.7,
@@ -126,6 +126,6 @@ print("\n" + "=" * 60)
 print("SUMMARY:")
 print(result["summary"])
 
-# Flush traces before exit
-provider.force_flush()
+# Flush traces before exit (set LEDDA_DEBUG=1 to see span details)
+ledda_flush(provider)
 print("\nTraces sent to Ledda.")

@@ -2,6 +2,7 @@
 Ledda OTEL initialization for LangGraph/LangChain apps.
 
 Call init_ledda() BEFORE importing any LangChain/LangGraph modules.
+Set LEDDA_DEBUG=1 to print span details after flush.
 """
 
 import os
@@ -49,6 +50,53 @@ class LeddaAttributeProcessor(SpanProcessor):
         return True
 
 
+class _SpanCollector(SpanProcessor):
+    """Collects finished spans for debug reporting."""
+
+    def __init__(self):
+        self.spans = []
+
+    def on_start(self, span: Span, parent_context=None) -> None:
+        pass
+
+    def on_end(self, span: ReadableSpan) -> None:
+        self.spans.append(span)
+
+    def shutdown(self) -> None:
+        pass
+
+    def force_flush(self, timeout_millis: int = 30000) -> bool:
+        return True
+
+    def report(self):
+        if not self.spans:
+            print("\n[ledda] WARNING: No spans captured!")
+            print("  - Is 'langchain' installed? (not just langchain-core)")
+            print("  - Is 'langchain-community' installed?")
+            return
+
+        trace_ids = set()
+        print(f"\n[ledda] {len(self.spans)} span(s) captured:")
+        for span in self.spans:
+            ctx = span.context
+            tid = format(ctx.trace_id, "032x")
+            trace_ids.add(tid)
+            attrs = dict(span.attributes) if span.attributes else {}
+            model = attrs.get("gen_ai.request.model", "")
+            tokens_in = attrs.get("gen_ai.usage.prompt_tokens",
+                                  attrs.get("gen_ai.usage.input_tokens", ""))
+            tokens_out = attrs.get("gen_ai.usage.completion_tokens",
+                                   attrs.get("gen_ai.usage.output_tokens", ""))
+            detail = f" model={model} tokens={tokens_in}/{tokens_out}" if model else ""
+            print(f"  [{span.name}]{detail}")
+
+        print(f"[ledda] Trace ID: {', '.join(trace_ids)}")
+
+
+# Module-level collector, set when debug is enabled
+_collector = None
+
+
 def init_ledda(
     service_name: str = "langgraph-app",
     tenant_id: str = "",
@@ -64,11 +112,15 @@ def init_ledda(
         tenant_name: Display name for the tenant.
         session_id: Link traces in the same conversation.
         workflow_name: Label this trace type in the dashboard.
+
+    Set LEDDA_DEBUG=1 to print span details on flush.
     """
+    global _collector
     load_dotenv()
 
     endpoint = os.environ.get("LEDDA_OTLP_ENDPOINT", "https://otlp.ledda.ai")
     api_key = os.environ["LEDDA_API_KEY"]
+    debug = os.environ.get("LEDDA_DEBUG", "") in ("1", "true")
 
     resource = Resource.create({"service.name": service_name})
     provider = TracerProvider(resource=resource)
@@ -82,6 +134,12 @@ def init_ledda(
             workflow_name=workflow_name,
         ))
 
+    # Debug: collect spans for reporting
+    if debug:
+        _collector = _SpanCollector()
+        provider.add_span_processor(_collector)
+        print(f"[ledda] Debug mode ON | endpoint={endpoint}")
+
     provider.add_span_processor(
         BatchSpanProcessor(
             OTLPSpanExporter(
@@ -94,3 +152,10 @@ def init_ledda(
     LangchainInstrumentor().instrument()
 
     return provider
+
+
+def ledda_flush(provider: TracerProvider):
+    """Flush traces and print debug report if LEDDA_DEBUG is enabled."""
+    provider.force_flush()
+    if _collector:
+        _collector.report()
