@@ -18,13 +18,22 @@ Usage:
 """
 
 # --- OTEL init (MUST happen before LangChain imports) ---
-from ledda_init import init_ledda, ledda_trace
+import uuid
 
-provider = init_ledda("langgraph-research-pipeline")
+from ledda_init import init_ledda
+
+SESSION_ID = f"session-{uuid.uuid4().hex[:8]}"
+
+provider = init_ledda(
+    service_name="langgraph-research-pipeline",
+    tenant_id="acme-corp",
+    tenant_name="Acme Corporation",
+    session_id=SESSION_ID,
+    workflow_name="research-pipeline",
+)
 
 # --- LangGraph agent ---
 import os
-import uuid
 
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
@@ -98,27 +107,14 @@ graph = graph_builder.compile()
 
 # --- Run ---
 TOPIC = "the impact of large language models on software engineering"
-SESSION_ID = f"session-{uuid.uuid4().hex[:8]}"
 
 print(f"Running 3-phase research pipeline on: '{TOPIC}'")
 print(f"  Tenant: acme-corp | Session: {SESSION_ID}")
 print("  Phase 1: Research -> Phase 2: Analyze -> Phase 3: Summarize\n")
 
-# Wrap the pipeline in a Ledda trace with routing attributes.
-# These control how the trace appears in your dashboard:
-#   - tenant_id/tenant_name: filter traces by customer
-#   - session_id: group related conversations together
-#   - workflow_name: label this trace type
-with ledda_trace(
-    "research-pipeline",
-    tenant_id="acme-corp",
-    tenant_name="Acme Corporation",
-    session_id=SESSION_ID,
-    workflow_name="research-pipeline",
-):
-    result = graph.invoke(
-        {"messages": [], "topic": TOPIC, "research": "", "analysis": "", "summary": ""}
-    )
+result = graph.invoke(
+    {"messages": [], "topic": TOPIC, "research": "", "analysis": "", "summary": ""}
+)
 
 print("=" * 60)
 print("RESEARCH:")
