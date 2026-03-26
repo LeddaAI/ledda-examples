@@ -13,7 +13,7 @@ from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExport
 from opentelemetry.instrumentation.langchain import LangchainInstrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import ReadableSpan, Span, SpanProcessor, TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 
 class LeddaAttributeProcessor(SpanProcessor):
@@ -83,7 +83,7 @@ def init_ledda(
         ))
 
     provider.add_span_processor(
-        SimpleSpanProcessor(
+        BatchSpanProcessor(
             OTLPSpanExporter(
                 endpoint=f"{endpoint}/v1/traces",
                 headers={"Authorization": f"Bearer {api_key}"},
