@@ -39,10 +39,13 @@ pip install -r requirements.txt
 ## Run
 
 ```bash
-# Part 1: See the broken version (no spans captured)
+# Part 1a: Broken — LLM calls in threads (fragmented traces)
 LEDDA_DEBUG=1 python broken.py
 
-# Part 2: See the fixed version (all spans captured)
+# Part 1b: Broken — entire graph in a thread (traces completely lost)
+LEDDA_DEBUG=1 python broken-graph.py
+
+# Part 2: Fixed — threads with proper context + flush (all spans captured)
 LEDDA_DEBUG=1 python fixed.py
 ```
 
@@ -50,6 +53,7 @@ LEDDA_DEBUG=1 python fixed.py
 
 | File | Description |
 |------|-------------|
-| `broken.py` | Threads without context propagation or flush — traces are lost |
+| `broken.py` | LLM calls in threads — traces are fragmented across multiple trace IDs |
+| `broken-graph.py` | Entire graph (build + compile + invoke) in a thread — traces completely lost |
 | `fixed.py` | Threads with `copy_context()` + `force_flush()` — traces arrive correctly |
 | `ledda_init.py` | Shared OTEL/Ledda initialization |
